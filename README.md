@@ -8,7 +8,7 @@ RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate si
 ----
   ```
 cargo run -- -h
-a password cracker in rust!
+RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists
 
 Usage: RustCrack.exe [OPTIONS]
 
