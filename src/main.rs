@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser, Debug)]
-#[command(about = "a password cracker in rust!", long_about = None)]
+#[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists", long_about = None)]
 
 struct Args {
     #[clap(short, long, default_value = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")]
