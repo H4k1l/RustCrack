@@ -1,13 +1,9 @@
-use clap::{builder::Str, Parser};
-use core::hash;
-use std::fmt::format;
-use std::{fs::File, string};
-use std::io::{self, Read, Write};
+use clap::Parser;
+use std::fs::File;
+use std::io::{Read, Write};
 use md5;
 use sha1::{Sha1, Digest};
 use sha2::{Sha256, Sha512};
-use rayon::prelude::*;
-use std::sync::{Arc, Mutex};
 
 #[derive(Parser, Debug)]
 #[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists", long_about = None)]
@@ -86,22 +82,22 @@ fn crackhash(chars: String, mnlenght: u64, mxlenght: u64, mut algo: String, verb
             }
         }
         else {
-            let mut filereader = File::open(wordlist.clone()).expect("cant open file");
+            let mut filereader = File::open(wordlist.clone()).expect("can't open file");
             let mut file = String::new();
-            filereader.read_to_string(&mut file);
+            filereader.read_to_string(&mut file).expect("can't read file");
             for word in file.lines(){
-                comparehash(hash.clone(), word.clone().to_string(), algo.clone(), verbose.clone());
+                comparehash(hash.clone(), word.to_string(), algo.clone(), verbose.clone());
             }
         }
     }
     else {
         let chars: Vec<char> = chars.chars().collect();
-        let mut filereader = File::open(hashfile).expect("cant open file");
+        let mut filereader = File::open(hashfile).expect("can't open file");
         let mut file = String::new();
-        filereader.read_to_string(&mut file);
+        filereader.read_to_string(&mut file).expect("can't read file");
         for hash in file.lines(){
             println!("trying '{}'", hash);
-            algo = detecthash(hash.clone().to_string());
+            algo = detecthash(hash.to_string());
             println!("rilevated: {}", algo);
             if wordlist == ""{
                 let mut found = false; 
@@ -114,7 +110,7 @@ fn crackhash(chars: String, mnlenght: u64, mxlenght: u64, mut algo: String, verb
                             word.push(chars[(temp % chars.len() as u64) as usize]);
                             temp /= chars.len() as u64;
                         }
-                        if comparehash(hash.clone().to_string(), word.clone(), algo.clone(), verbose.clone()){
+                        if comparehash(hash.to_string(), word.clone(), algo.clone(), verbose.clone()){
                             found = true;
                             break;
                         }
@@ -125,11 +121,11 @@ fn crackhash(chars: String, mnlenght: u64, mxlenght: u64, mut algo: String, verb
                 }
             }
             else{
-                let mut filereader = File::open(wordlist.clone()).expect("cant open file");
+                let mut filereader = File::open(wordlist.clone()).expect("can't open file");
                 let mut file = String::new();
-                filereader.read_to_string(&mut file);
+                filereader.read_to_string(&mut file).expect("can't read file");
                 for word in file.lines(){
-                    if comparehash(hash.clone().to_string(), word.clone().to_string(), algo.clone(), verbose.clone()){
+                    if comparehash(hash.to_string(), word.to_string(), algo.clone(), verbose.clone()){
                         break;
                     }
                 }
