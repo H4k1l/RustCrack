@@ -8,7 +8,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "md5",
- "rayon",
  "sha1",
  "sha2",
 ]
