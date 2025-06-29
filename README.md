@@ -31,3 +31,7 @@ Options:
 # Disclaimers
 ----
 The author is not responsible for any damages, misuse or illegal activities resulting from the use of this code.
+
+# LICENSE
+----
+This project is distributed under license [Apache 2.0](LICENSE).
