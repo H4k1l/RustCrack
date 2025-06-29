@@ -1,6 +1,6 @@
 # RustCrack
 ----
-RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists
+RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists, can also use CUDA
 # Screenshots
 ----
 ![RustCrack](https://github.com/H4k1l/RustCrack/blob/main/images/screenshot1.png)
