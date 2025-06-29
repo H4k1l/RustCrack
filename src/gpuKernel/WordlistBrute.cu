@@ -1,3 +1,6 @@
+// Copyright 2025 Hakil
+// Licensed under the Apache License, Version 2.0
+
 // -- hashfnct -- //
 
 // md5
