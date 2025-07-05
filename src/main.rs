@@ -9,7 +9,7 @@ use sha2::{Sha256, Sha512};
 use cudarc::{self, driver::{CudaContext, LaunchConfig, PushKernelArg}, nvrtc::Ptx};
 
 #[derive(Parser, Debug)]
-#[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists", long_about = None)]
+#[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists, can also use CUDA", long_about = None)]
 
 struct Args {
 
