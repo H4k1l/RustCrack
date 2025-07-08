@@ -560,19 +560,22 @@ __device__ void compute_sha512_cuda_single(char* word, int word_length, char* ou
 #include <stdlib.h>
 #include <cstring>
 
-extern "C" __global__ void crackWord(char* chars, int charsLen, unsigned long long* range, char* hash, int hashtype, int n, bool verbose){
+__device__ int globalMatchCount = 0; // used for outputFile management
+
+extern "C" __global__ void crackWord(char* chars, int charsLen, unsigned long long* range, char* hash, int hashtype, int n, bool verbose, bool nofile, char* outputFile){
+
+    int i =  blockIdx.x * blockDim.x + threadIdx.x; // calculate the ID of the single thread
     
-    int i =  blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {    
         int hashlen;
         
         for(int j = range[(i*3)+1]; j <= range[(i*3)+2]; j++){ // iterate for every seed
-            char hashWordcmp[129];
+            char hashWordcmp[129]; // size is 129 to accommodate the longest hash output (SHA-512)
             int currentLength = range[i*3];
             char* word = new char[currentLength + 1];
             int temp = j;
 
-            for(int h = 0; h < currentLength; h++){
+            for(int h = 0; h < currentLength; h++){ // creating the word with the seed
 
                 word[h] = chars[temp % charsLen];
                 temp /= charsLen;
@@ -617,23 +620,40 @@ extern "C" __global__ void crackWord(char* chars, int charsLen, unsigned long lo
                 totHashes++;
             }
             
-            bool* match = new bool[totHashes/hashlen];
+            bool* match = new bool[totHashes/hashlen]; // create the array of bool for the check
             
-            for (int j = 0; j < (totHashes/hashlen); j++) {
-                int indx = j * hashlen;
-                char* nHash = &hash[indx];
-                match[j] = true;
+            for (int k = 0; k < (totHashes/hashlen); k++) {
+                int indx = k * hashlen; // calculate the hash index 
+                char* nHash = &hash[indx]; // copy the hash to inspect
+                match[k] = true;
                 for (int h = 0; h < hashlen; h++){
-                    if (hashWordcmp[h] != nHash[h]){
-                        match[j] = false;
+                    if (hashWordcmp[h] != nHash[h]){ // if there is an inconsistency, the match fails
+                        match[k] = false;
                         break;
                     }
                 }
-                if (match[j]) {
+                if (match[k]) { 
                     printf("FOUND MATCH: '%s' -> '%s'\n", hashWordcmp, word);
+                    if (!nofile) { // if not disabled, insert the entries in the buffer, in the format: <\0hash\0word\0>
+                        int matchID = atomicAdd(&globalMatchCount, 1);
+                        int recSize = hashlen + currentLength + 4;
+                        int offset = matchID * recSize;
+                        outputFile[offset] = '\0';
+
+                        for (int l = 0; l < hashlen && hashWordcmp[l] != '\0'; l++){
+                            outputFile[offset+1+l] = hashWordcmp[l];
+                        }
+    
+                        outputFile[(offset + hashlen + 1)] = '\0';
+
+                        for (int l = 0; l < currentLength && word[l] != '\0'; l++){
+                            outputFile[offset+1+hashlen+1+l] = word[l];
+                        }
+                        outputFile[(offset+1+hashlen+1+currentLength)] = '\0';
+                    }
                 }
-                else if (!match[j] && verbose){
-                    printf("dont work: '%s'\n", hashWordcmp);
+                else if (!match[k] && verbose){
+                    printf("dont work: '%s'\n", word);
                 }
             }
 
