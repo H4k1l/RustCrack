@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0
 
 use clap::Parser;
-use std::{fs::File, io::{Read, Write}};
+use std::{fs::{exists, File}, io::{Read, Write}};
 use md5;
 use sha1::{Sha1, Digest};
 use sha2::{Sha256, Sha512};
 use cudarc::{self, driver::{CudaContext, LaunchConfig, PushKernelArg}, nvrtc::Ptx};
 
 #[derive(Parser, Debug)]
-#[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists, can also use CUDA", long_about = None)]
+#[command(about = "RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.", long_about = None)]
 
 struct Args {
 
@@ -51,119 +51,126 @@ struct Args {
     #[clap(long = "gpu", help = "use CUDA to maximize the efficency for nvidia GPU's")]
     gpu: bool,
 
+    #[clap(long = "nofile", help = "don't check if the hash is already found, and don't save the hash result", default_value_t = false)]
+    nofile: bool,
+
     #[clap(short = 't', long, help = "maximum usable of cuda threads in percentage", default_value_t = 100)]
     mxcudathreads: u64,
+
 }
 fn main(){
     let args = Args::parse();
     if args.generatewordlist{
         if args.gpu {
-            cudageneratewordlist(args.chars.to_owned(), args.mnlenght, args.mxlenght, args.outputfile.clone(), args.mxcudathreads);
+            cudageneratewordlist(args.chars.to_owned(), args.mnlenght, args.mxlenght, args.outputfile.clone(), args.mxcudathreads, args.verbose);
         }
-        generatewordlist(args.chars.to_owned(), args.mnlenght, args.mxlenght, args.outputfile);
+        generatewordlist(args.chars.to_owned(), args.mnlenght, args.mxlenght, args.outputfile, args.verbose);
     }
     if args.crackhash{
         if args.gpu {
-            cudacrackhash(args.chars, args.mnlenght, args.mxlenght, args.mxcudathreads,args.algorithm.unwrap_or_default(), args.verbose, args.hash.unwrap_or_default(), args.hashfile.unwrap_or_default(), args.wordlist.unwrap_or_default());
+            cudacrackhash(args.chars, args.mnlenght, args.mxlenght, args.mxcudathreads,args.algorithm.unwrap_or_default(), args.verbose, args.hash.unwrap_or_default(), args.hashfile.unwrap_or_default(), args.wordlist.unwrap_or_default(), args.nofile);
         }
         else {
-            crackhash(args.chars, args.mnlenght, args.mxlenght, args.algorithm.unwrap_or_default(), args.verbose, args.hash.unwrap_or_default(), args.hashfile.unwrap_or_default(), args.wordlist.unwrap_or_default());
+            crackhash(args.chars, args.mnlenght, args.mxlenght, args.algorithm.unwrap_or_default(), args.verbose, args.hash.unwrap_or_default(), args.hashfile.unwrap_or_default(), args.wordlist.unwrap_or_default(), args.nofile);
         }
     }
 }
 
-fn crackhash(chars: String, mnlenght: u64, mxlenght: u64, mut algo: String, verbose: bool, hash: String, hashfile: String, wordlist: String) {
-    if &hash != ""{ // if the hash is provided, try to crack the single hash
-        algo = algo.to_lowercase();
-        if algo == ""{
-            algo = detecthash(&hash);
-            println!("rilevated: {}", algo);
-        }
-        else if algo == "md5" || algo == "sha-1" || algo == "sha-256" || algo == "sha-512" {
-            algo = algo;
-        }
-        else {
-            panic!("invalid hash!")
-        }
-        if wordlist == ""{ // if no wordlist is provided, execute a pure-bruteforce algorithm
-            let chars: Vec<char> = chars.chars().collect();
-                for length in mnlenght..=mxlenght { // Loop through word lengths from minimum to maximum
-                    let total = (chars.len() as u64).pow(length as u32); // Total number of possible combinations for this word length, chars * lenght create a matrix of possibilities
-                    for n in 0..total {
-                        let mut word = String::new();
-                        let mut temp = n;
-                        for _ in 0..length { // Generate each character of the word based on current number
-                            word.push(chars[(temp % chars.len() as u64) as usize]); // insert in word the expected char(based on the number of position of possibility)
-                            temp /= chars.len() as u64; // temp = temp / chars lenght
-                        }
-                        comparehash(hash.to_owned(), word, algo.to_owned(), verbose);
-                }
-            }
-        }
-        else { // else, use the wordlist for a classic wordlist-bruteforce
-            let mut filereader = File::open(&wordlist).expect("can't open file");
-            let mut file = String::new();
-            filereader.read_to_string(&mut file).expect("can't read file");
-            for word in file.lines(){
-                comparehash(hash.to_owned(), word.to_string(), algo.to_owned(), verbose);
-            }
-        }
-    }
-    else { // else, get the hashes file, and crack all of them
-        let chars: Vec<char> = chars.chars().collect();
-        let mut filereader = File::open(hashfile).expect("can't open file");
-        let mut file = String::new();
-        filereader.read_to_string(&mut file).expect("can't read file");
-        for hash in file.lines(){
-            println!("trying '{}'", hash);
-            algo = detecthash(&hash);
-            println!("rilevated: {}", algo);
-            if &wordlist == ""{ // if no wordlist is provided, execute a pure-bruteforce algorithm
-                let mut found = false; 
-                for length in mnlenght..=mxlenght { // Loop through word lengths from minimum to maximum
-                    let total = (chars.len() as u64).pow(length as u32); // Total number of possible combinations for this word length, chars * lenght create a matrix of possibilities
-                    for n in 0..total {
-                        let mut word = String::new();
-                        let mut temp = n;
-                        for _ in 0..length { // Generate each character of the word based on current number
-                            word.push(chars[(temp % chars.len() as u64) as usize]); // insert in word the expected char(based on the number of position of possibility)
-                            temp /= chars.len() as u64; // temp = temp / chars lenght
-                        }
-                        if comparehash(hash.to_owned(), word, algo.to_owned(), verbose){
-                            found = true;
-                            break;
-                        }
-                    }
-                    if found{
-                        break;
-                    }
-                }
-            }
-            else{ // else, use the wordlist for a classic wordlist-bruteforce
-                let mut filereader = File::open(&wordlist).expect("can't open file");
-                let mut file = String::new();
-                filereader.read_to_string(&mut file).expect("can't read file");
-                for word in file.lines(){
-                    if comparehash(hash.to_string(), word.to_string(), algo.to_owned(), verbose){
-                        break;
-                    }
-                }
-            }
-        }   
-    }
-}
-
-fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64, mut algo: String, verbose: bool, hash: String, hashfile: String, wordlist: String) {
-    
+fn crackhash(chars: String, mnlenght: u64, mxlenght: u64, mut algo: String, verbose: bool, hash: String, hashfile: String, wordlist: String, nofile: bool) {
+  
+    // initializing the vector of hashes
     let mut hashVecRAM: Vec<&str> = vec![&hash];
+    let mut hashfound: Vec<String> = Vec::new();
     let mut lines = String::new();
 
-    if &hash == "" {
+    if &hash == "" { // if the single hash arg is not provided, load the hashes from the file
         let mut filereader = File::open(hashfile).expect("can't open file");
         filereader.read_to_string(&mut lines).expect("can't read file");
         hashVecRAM = lines.lines().collect(); // the hash in a vector
     }
+
+    if !nofile {
+        hashVecRAM = checkifalreadyfound(hashVecRAM.clone());
+    }
+    let chars: Vec<char> = chars.chars().collect();
     
+    for hash in hashVecRAM{
+        println!("trying '{}'", hash);
+        algo = detecthash(&hash);
+        println!("rilevated: {}", algo);
+        if &wordlist == ""{ // if no wordlist is provided, execute a pure-bruteforce algorithm
+            let mut found = false; 
+            for length in mnlenght..=mxlenght { // Loop through word lengths from minimum to maximum
+                let total = (chars.len() as u64).pow(length as u32); // Total number of possible combinations for this word length, chars * lenght create a matrix of possibilities
+                for n in 0..total {
+                    let mut word = String::new();
+                    let mut temp = n;
+                    for _ in 0..length { // Generate each character of the word based on current number
+                        word.push(chars[(temp % chars.len() as u64) as usize]); // insert in word the expected char(based on the number of position of possibility)
+                        temp /= chars.len() as u64; // temp = temp / chars lenght
+                    }
+                    if comparehash(hash, &word, &algo, verbose){ 
+                        found = true;
+                        if !nofile {
+                            hashfound.push(format!("{}:{}\n", hash, word));
+                        }
+                        break;
+                    }
+                }
+                if found{
+                    break;
+                }
+            }
+        }
+        else{ // else, use the wordlist for a classic wordlist-bruteforce
+            let mut filereader = File::open(&wordlist).expect("can't open file"); // loading the wordlist
+            let mut file = String::new();
+            filereader.read_to_string(&mut file).expect("can't read file");
+            for word in file.lines(){ // do the brute-force
+                if comparehash(hash, word, &algo, verbose){
+                    if !nofile {
+                        hashfound.push(format!("{}:{}\n", hash, word));
+                    }
+                    break;
+                }
+            }
+        }
+
+        if !nofile {
+            // rewriting the file "found" with the new entries
+            let mut file = File::open("src/found").expect("can't find file 'found'");
+            let mut foundfile = String::new();
+            file.read_to_string(&mut foundfile);
+            for find in &hashfound {
+                if !foundfile.contains(find){ // to avoid duplication, check if it is not already present
+                    foundfile.push_str(&find);
+                }
+            }
+            let mut file = File::create("src/found").expect("can't recreate file: 'found'");
+            file.write_all(foundfile.as_bytes());
+        }   
+    }   
+}
+
+fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64, mut algo: String, verbose: bool, hash: String, hashfile: String, wordlist: String, nofile: bool) {
+    
+    // initializing the vector of hashes
+    let mut hashVecRAM: Vec<&str> = vec![&hash];
+    let mut lines = String::new();
+
+    if &hash == "" { // if the single hash arg is not provided, load the hashes from the file
+        let mut filereader = File::open(hashfile).expect("can't open file");
+        filereader.read_to_string(&mut lines).expect("can't read file");
+        hashVecRAM = lines.lines().collect(); // the hash in a vector
+    }
+
+    if !nofile {
+        hashVecRAM = checkifalreadyfound(hashVecRAM.clone());
+        if hashVecRAM.is_empty() {
+            return;
+        }
+    }
+
     algo = algo.to_lowercase();
     if algo == ""{
         if &hash != "" {
@@ -183,7 +190,7 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
 
     let mut hashtype: i32 = 0;
 
-    if algo == "md5" {
+    if algo == "md5" { // assign a unique ID to each hash type for easier identification
         hashtype = 0;
     }
     else if algo == "sha-1" {
@@ -196,9 +203,12 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         hashtype = 3;
     }
 
-    if wordlist == ""{ // if no wordlist is provided, execute a pure-bruteforce algorithm
+    let ctx = CudaContext::new(0).expect("can't create cuda context");
+    let stream = ctx.default_stream();
+    let mut outputFound= stream.alloc_zeros::<u8>(0).unwrap();
 
-        let ctx = CudaContext::new(0).expect("can't create cuda context");
+    if wordlist == ""{ // if no wordlist is provided, execute a pure-bruteforce algorithm 
+
 
         // calculate the maximum threads for chunking
         let mut mxThread: u64 = 0;
@@ -221,7 +231,6 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
             }
         }
         let actForThread = totalAct.div_ceil(mxThread);
-
         // structure of rangeVecRAM: <length, from, to>. Each thread works on a group of these 3 elements
         for length in mnlenght..=mxlenght {
             for i in 0..((chars.len() as u64).pow(length as u32)) {
@@ -232,7 +241,7 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
                 rangeVecRAM.push(i * actForThread);
                 if (i * actForThread) + (actForThread - 1) <= (chars.len() as u64).pow(length as u32) {
                     rangeVecRAM.push((i * actForThread) + (actForThread - 1));
-                }
+                }   
                 else {
                     break;
                 }
@@ -241,7 +250,6 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
 
         // starting the kernel with cuda
         let ptx = ctx.load_module(Ptx::from_file("src/gpuKernel/PureBrute.ptx")).expect("error while loading the module, be sure the module 'src/gpuKernel/WordlistBrute.ptx' exist");
-        let stream = ctx.default_stream();
         let fnct = ptx.load_function("crackWord").unwrap();
 
         // converting in bytes
@@ -251,7 +259,22 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         let mut usedThreads = rangeVecRAM.len() / 3;
         let chrlen = chars.len();
         
+        if verbose {
+            let mut totalUsedMem = 0;
+            totalUsedMem += std::mem::size_of::<Vec<u8>>() + hashVecRAMBytes.capacity() * std::mem::size_of::<u8>();
+            totalUsedMem += std::mem::size_of::<Vec<u8>>() + charsVecRAMBytes.capacity() * std::mem::size_of::<u8>();
+            totalUsedMem += std::mem::size_of::<Vec<u64>>() + rangeVecRAM.capacity() * std::mem::size_of::<u64>();
+            if !nofile {
+                totalUsedMem += std::mem::size_of::<Vec<u64>>() + ((hashVecRAMBytes.len() / hashVecRAM.len()) * mxlenght as usize) * std::mem::size_of::<u64>();
+            }
+            let (meminfo1, _) = cudarc::driver::result::mem_get_info().unwrap();
+            println!("memory required: {totalUsedMem} bytes\nusable memory of the gpu: {meminfo1} bytes\ntotal actions to perform: {totalAct}\ntotal actions to perform for each thread: {actForThread}");
+        }
+
         // loading the memory
+        if !nofile { // if not disabled, alloc '0' to create an output buffer
+            outputFound = stream.alloc_zeros::<u8>((hashVecRAMBytes.len() / hashVecRAM.len()) * mxlenght as usize).expect("can't allocate the outputVector in the DRAM");    
+        }
         let mut hashListDRAM = stream.alloc_zeros::<u8>(hashVecRAMBytes.len()).expect("can't allocate the hash list in the DRAM");
         let mut charsListDRAM = stream.alloc_zeros::<u8>(charsVecRAMBytes.len()).expect("can't allocate the chars list in the DRAM");
         let mut rangesDRAM = stream.alloc_zeros::<u64>(rangeVecRAM.len()).expect("can't allocate the ranges list in the DRAM");
@@ -282,6 +305,9 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
             shared_mem_bytes: 0,
         };
 
+        if verbose {
+            println!("launching: {usedThreads} threads per block\nlaunching: {usedBlocks} blocks");
+        }
         // launch the kernel
         let mut launchArg = stream.launch_builder(&fnct);
         launchArg.arg(&mut charsListDRAM);
@@ -291,6 +317,8 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         launchArg.arg(&hashtype);
         launchArg.arg(&n);
         launchArg.arg(&verbose);
+        launchArg.arg(&nofile);
+        launchArg.arg(&outputFound);
         unsafe {launchArg.launch(launcher);}
 
         stream.synchronize().expect("can't synchronize the threads gpu");
@@ -302,9 +330,7 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         filereader.read_to_string(&mut file).expect("can't read file");
 
         // starting the kernel with cuda
-        let ctx = CudaContext::new(0).expect("can't create cuda context");
         let ptx = ctx.load_module(Ptx::from_file("src/gpuKernel/WordlistBrute.ptx")).expect("error while loading the module, be sure the module 'src/gpuKernel/WordlistBrute.ptx' exist");
-        let stream = ctx.default_stream();
         let fnct = ptx.load_function("crackWord").unwrap();
 
         // loading the memory
@@ -329,6 +355,23 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         let hashVecRAMBytes = hashVecRAM.join("").as_bytes().to_vec();
         let byteswordListVecRAM = wordListVecRAM.join("\0").as_bytes().to_vec();
         
+        if !nofile {
+            outputFound = stream.alloc_zeros::<u8>((hashVecRAMBytes.len() / hashVecRAM.len()) * mxlenght as usize).expect("can't allocate the outputVector in the DRAM");    
+        }
+
+        if verbose {
+            let mut totalUsedMem = 0;
+            totalUsedMem += std::mem::size_of::<Vec<u8>>() + hashVecRAMBytes.capacity() * std::mem::size_of::<u8>();
+            totalUsedMem += std::mem::size_of::<Vec<u8>>() + byteswordListVecRAM.capacity() * std::mem::size_of::<u8>();
+            totalUsedMem += std::mem::size_of::<Vec<i32>>() + lenghtsVecRAM.capacity() * std::mem::size_of::<i32>();
+            totalUsedMem += std::mem::size_of::<Vec<i32>>() + offsetVecRAM.capacity() * std::mem::size_of::<i32>();
+            if !nofile {
+                totalUsedMem += std::mem::size_of::<Vec<u64>>() + ((hashVecRAMBytes.len() / hashVecRAM.len()) * mxlenght as usize) * std::mem::size_of::<u64>();
+            }
+            let (meminfo1, _) = cudarc::driver::result::mem_get_info().unwrap();
+            println!("memory required: {totalUsedMem} bytes\nusable memory of the gpu: {meminfo1} bytes\ntotal word to check: {}", wordListVecRAM.len());
+        }
+
         // allocate the memory in the gpu
         let mut wordListVecDRAM = stream.alloc_zeros::<u8>(byteswordListVecRAM.len()).expect("can't allocate the wordlist in the DRAM");
         let mut offsetVecDRAM = stream.alloc_zeros::<i32>(offsetVecRAM.len()).expect("can't allocate the offset list in the DRAM");
@@ -361,6 +404,9 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
             shared_mem_bytes: 0,
         };
 
+        if verbose {
+            println!("launching: {x} threads per block\nlaunching: {usedBlocks} blocks");
+        }
         let mut launchArg = stream.launch_builder(&fnct);
         launchArg.arg(&mut wordListVecDRAM);
         launchArg.arg(&mut offsetVecDRAM);
@@ -369,13 +415,44 @@ fn cudacrackhash(chars: String, mnlenght: u64, mxlenght: u64, mxcudathreads: u64
         launchArg.arg(&hashtype);
         launchArg.arg(&n);
         launchArg.arg(&verbose);
+        launchArg.arg(&nofile);
+        launchArg.arg(&outputFound);
         unsafe {launchArg.launch(launcher);}
 
         stream.synchronize().expect("can't synchronize the threads gpu");
+
+
     }
+
+    if !nofile { // after thread synchronization, update 'found' file with new found entries
+        let outputVecRAM = stream.memcpy_dtov(&outputFound).unwrap(); // getting the output vector from the DRAM
+        let otpstr = String::from_utf8(outputVecRAM).unwrap();
+        let mut otpstr = otpstr.split("\0");
+        let mut results: Vec<&str> = Vec::new(); // this vector have this structure: <hash, word>
+        for i in otpstr{
+            if !i.is_empty(){ // skip empty strings that may result from splitting
+                results.push(i);
+            }
+        }
+
+        // rewriting the file "found" with the new entries
+        let mut file = File::open("src/found").expect("can't find file 'found'");
+        let mut foundfile = String::new();
+        file.read_to_string(&mut foundfile);
+        let mut iter = 0;
+        for _ in 0..(results.len()/2) {
+            if !foundfile.contains(results[iter]){ // to avoid duplication, check if it is not already present
+                foundfile.push_str(format!("{}:{}\n", results[iter], results[iter+1]).as_str()); // load every entry with te format: 'HASH:WORD'
+            }
+            iter += 2;
+        }
+        let mut file = File::create("src/found").expect("can't recreate file: 'found'");
+        file.write_all(foundfile.as_bytes());
+    }
+
 }
 
-fn generatewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Option<String>) { // same algorithm as before for the pure-bruteforcing
+fn generatewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Option<String>, verbose: bool) { // same algorithm as before for the pure-bruteforcing
     let mut filewriter: Option<File> = None;
     if let Some(ref output) = outputfile {
         filewriter = Some(File::create(output).expect("cant create file"));
@@ -394,8 +471,9 @@ fn generatewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Opt
             if let Some(ref mut writer) = filewriter {
                 word.push_str("\n");
                 writer.write_all(word.as_bytes()).expect("Failed to write to file");
-            } else {
-                // println!("{}", word);
+            } 
+            if outputfile == None || verbose{
+                println!("{}", word.replace("\n", ""));                
             }
 
         }
@@ -404,12 +482,13 @@ fn generatewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Opt
 
 }
 
-fn cudageneratewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Option<String>, mxcudathreads: u64) {
+fn cudageneratewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile: Option<String>, mxcudathreads: u64, verbose: bool) {
     let ctx = CudaContext::new(0).expect("can't create cuda context");
 
     // calculate the maximum threads for chunking
     let mut mxThread: u64 = 0;
     unsafe {
+        let a = cudarc::driver::result::device::get_attribute(0, cudarc::driver::sys::CUdevice_attribute::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY);
         let totSM = cudarc::driver::result::device::get_attribute(0, cudarc::driver::sys::CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT).unwrap(); 
         let smMxThread = cudarc::driver::result::device::get_attribute(0, cudarc::driver::sys::CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR).unwrap(); 
         mxThread = (totSM * smMxThread) as u64;
@@ -460,6 +539,15 @@ fn cudageneratewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile:
     let mut usedThreads = rangeVecRAM.len() / 3;
     let chrlen = chars.len();
 
+    if verbose {
+        let mut totalUsedMem = 0;
+        totalUsedMem += std::mem::size_of::<Vec<u64>>() + ttact as usize * std::mem::size_of::<u64>();
+        totalUsedMem += std::mem::size_of::<Vec<u8>>() + charsVecRAMBytes.capacity() * std::mem::size_of::<u8>();
+        totalUsedMem += std::mem::size_of::<Vec<u64>>() + rangeVecRAM.capacity() * std::mem::size_of::<u64>();
+        let (meminfo1, _) = cudarc::driver::result::mem_get_info().unwrap();
+        println!("memory required: {totalUsedMem} bytes\nusable memory of the gpu: {meminfo1} bytes\ntotal actions to perform: {totalAct}\ntotal actions to perform for each thread: {actForThread}");
+    }
+
     // loading the memory
     let mut charsListDRAM = stream.alloc_zeros::<u8>(charsVecRAMBytes.len()).expect("can't allocate the chars list in the DRAM");
     let mut rangesDRAM = stream.alloc_zeros::<u64>(rangeVecRAM.len()).expect("can't allocate the ranges list in the DRAM");
@@ -489,18 +577,22 @@ fn cudageneratewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile:
         block_dim: (usedThreads as u32, 1, 1),
         shared_mem_bytes: 0,
     };
-
+    
+    if verbose {
+            println!("launching: {usedThreads} threads per block\nlaunching: {usedBlocks} blocks");
+    }
     // launch the kernel
     let mut launchArg = stream.launch_builder(&fnct);
     launchArg.arg(&mut charsListDRAM);
     launchArg.arg(&chrlen);
     launchArg.arg(&mut rangesDRAM);
-    launchArg.arg(&n);
+    launchArg.arg(&usedThreads);
     launchArg.arg(&outputDRAM);
     unsafe {launchArg.launch(launcher);}
 
     stream.synchronize().expect("can't synchronize the threads gpu");
 
+    
     let outputVecRAM = stream.memcpy_dtov(&outputDRAM).unwrap();
     let otpstr = String::from_utf8(outputVecRAM).unwrap();
 
@@ -510,7 +602,6 @@ fn cudageneratewordlist(chars: String, mnlenght: u64, mxlenght: u64, outputfile:
 
     }
     
-
 }
 
 fn calulateoptimalblocksize() -> i32{
@@ -537,6 +628,39 @@ fn calulateoptimalblocksize() -> i32{
     bestblocksize
 }
 
+fn checkifalreadyfound(hashes: Vec<&str>) -> Vec<&str> {
+
+    if !exists("src/found").unwrap(){ 
+        File::create("src/found").expect("can't create 'found' file");
+    }
+
+    // opening the file "found"
+    let mut file = File::open("src/found").expect("can't find file 'found'"); 
+    let mut foundfile = String::new();
+    file.read_to_string(&mut foundfile);
+    
+    // building the new hashes vector(without the already found hashes) 
+    let mut returnerHashes: Vec<&str> = Vec::new();
+    for hash in hashes{
+        let mut found = false;
+        if !hash.is_empty() {
+            for line in foundfile.lines() {
+                if line.starts_with(hash){
+                    println!("hash in 'found' '{}' -> '{}'", hash, line.replace(hash, "").replace(":", ""));
+                    found = true;
+                    continue;
+                }
+            }
+            if !found {
+                returnerHashes.push(&hash);
+            }
+        }
+
+    }
+    returnerHashes
+
+}
+
 fn detecthash(hash: &str) -> String{
     if hash.chars().all(|c| c.is_digit(16)){
         if hash.len() == 32 {
@@ -560,7 +684,7 @@ fn detecthash(hash: &str) -> String{
     }
 }
 
-fn comparehash(hash: String, word: String, algo: String, verbose: bool) -> bool{
+fn comparehash(hash: &str, word: &str, algo: &str, verbose: bool) -> bool{
     if algo == "md5" && format!("{:x}",md5::compute(&word)) == hash{
         println!("FOUND MATCH: '{}' -> '{}'", hash, word);
         return true;
