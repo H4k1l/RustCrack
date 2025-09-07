@@ -34,7 +34,7 @@ git clone https://github.com/H4k1l/RustCrack.git
 ----
 ```
 cargo run -- -h
-RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
+RustCrack v1.1.2 can crack the hashes of MD5, SHA-1, SHA-224, SHA-256, SHA-384 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
 
 Usage: RustCrack [OPTIONS]
 
@@ -44,15 +44,16 @@ Options:
   -x, --mxlenght <MXLENGHT>            [default: 10]
   -o, --output <OUTPUTFILE>            
       --gen                            generate a wordlist
-  -a, --algo <ALGORITHM>               the hash algorithm to use (md5/sha-1/sha-256/sha-512)
+  -a, --algo <ALGORITHM>               the hash algorithm to use (md5/sha-1/sha-224/sha-256/sha-384/sha-512)
   -w, --wordlist <WORDLIST>            try to use a wordlist to brute the hash
   -H, --hash <HASH>                    
       --hashfile <HASHFILE>            
-  -v, --verbose                        
+  -v, --verbose...                     use -vv to get a more verbose output
       --crack                          crack a hash
+  -t, --mxcudathreads <MXCUDATHREADS>  maximum usable of cuda threads in percentage [default: 100]
       --gpu                            use CUDA to maximize the efficency for nvidia GPU's
       --nofile                         don't check if the hash is already found, and don't save the hash result
-  -t, --mxcudathreads <MXCUDATHREADS>  maximum usable of cuda threads in percentage [default: 100]
+      --expand                         expands the wordlist with new possible password combinations(example: 'hello' -> 'h3ll0')
   -h, --help                           Print help
 ```
 For crack an hash using a pure brute-force alorithm, you can simply run this command:
