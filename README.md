@@ -1,6 +1,6 @@
 # RustCrack
 ----
-RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
+RustCrack v1.1.2 can crack the hashes of MD5, SHA-1, SHA-224, SHA-256, SHA-384 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
 # Install
 ----
 install all the dependencies:
