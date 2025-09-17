@@ -64,6 +64,9 @@ struct Args {
 }
 
 fn main(){
+    if env::args().len() == 1 {
+        println!("No arguments provided.\nFor more information, try '--help'.");
+    }
     let args = Args::parse();
     if args.generatewordlist{
         if args.gpu {
