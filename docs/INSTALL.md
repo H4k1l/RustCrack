@@ -158,22 +158,15 @@ winget install --id Git.Git -e --source winget;
 
 Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe; Start-Process .\rustup-init.exe;
 
-Start-Process "https://www.nvidia.com/Download/index.aspx";
-
 ```
 
-At this point, you need to install the Nvidia drivers from the opened web page and reboot the system.
+At this point, you need to install the Nvidia drivers from [this](https://www.nvidia.com/Download/index.aspx) web page and reboot the system.
 
 
 Part 2: Install CUDA.
 
-```
 
-Start-Process "https://developer.nvidia.com/cuda-downloads";
-
-```
-
-Now, you need to install the Nvidia drivers from the opened web page and reboot the system.
+You need to install the Nvidia drivers from [this](https://developer.nvidia.com/cuda-downloads) web page and reboot the system.
 
 
 Part 3: export the CUDA path.
