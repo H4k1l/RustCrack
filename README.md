@@ -51,14 +51,11 @@ git clone https://github.com/H4k1l/RustCrack.git
 ## Install for Windows
 Part 1:
 ```
-winget upgrade --all; winget install --id Git.Git -e --source winget;Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe; Start-Process .\rustup-init.exe;Start-Process "https://www.nvidia.com/Download/index.aspx";
+winget upgrade --all; winget install --id Git.Git -e --source winget;Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe; Start-Process .\rustup-init.exe;
 ```
-at this point you have to install the Nvidia drivers from the opened web page and reboot the system.
+At this point, you need to install the Nvidia drivers from [this](https://www.nvidia.com/Download/index.aspx) web page and reboot the system.
 Part 2:
-```
-Start-Process "https://developer.nvidia.com/cuda-downloads";
-```
-at this point you have to install the Nvidia drivers from the opened web page and reboot the system.
+Now you need to install the Nvidia drivers from [this](https://developer.nvidia.com/cuda-downloads) web page and reboot the system.
 Part 3:
 ```
 setx PATH "$Env:PATH;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5\bin"; setx CUDA_PATH "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5";
