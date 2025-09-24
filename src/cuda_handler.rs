@@ -1,10 +1,12 @@
 // Copyright 2025 Hakil
 // Licensed under the Apache License, Version 2.0
 
+use crate::generators::range_builder;
 // importing modules
 use crate::hash_utils;
 use crate::generators;
 
+use std::vec;
 // importing libraries
 use std::{
     fs::File, 
@@ -166,14 +168,14 @@ pub fn cuda_generate_wordlist(chars: String, mnlength: u64, mxlength: u64, outpu
 pub fn cuda_crack_hash(chars: String, mnlength: u64, mxlength: u64, mxcudathreads: u64, mut algo: String, verbose: u8, hash: String, hashfile: String, wordlist: String, nofile: bool, expand: bool) {
     
     // initializing the vector of hashes
-    let mut hash_vec_ram: Vec<&str> = vec![&hash];
+    let mut hash_vec_ram: Vec<String> = vec![hash.to_string()];
     let mut hash_algo_vec_ram: Vec<u8> = Vec::new();
     let mut lines = String::new();
 
     if &hash == "" { // if the single hash arg is not provided, load the hashes from the file
         let mut filereader = File::open(hashfile).expect("can't open file");
         filereader.read_to_string(&mut lines).expect("can't read file");
-        hash_vec_ram = lines.lines().collect(); // the hash in a vector
+        hash_vec_ram = lines.lines().map(|x| x.to_string()).collect(); // the hash in a vector
     }
 
     if !nofile {
@@ -196,23 +198,14 @@ pub fn cuda_crack_hash(chars: String, mnlength: u64, mxlength: u64, mxcudathread
         else {
             panic!("invalid hash!");
         }
-        if vec_algo == "md5" { // assign a unique ID to each hash type for easier identification
-            hash_algo_vec_ram.push(0);
-        }
-        else if vec_algo == "sha-1" {
-            hash_algo_vec_ram.push(1);
-        }
-        else if vec_algo == "sha-224" {
-            hash_algo_vec_ram.push(2);
-        }
-        else if vec_algo == "sha-256" {
-            hash_algo_vec_ram.push(3);
-        }
-        else if vec_algo == "sha-384" {
-            hash_algo_vec_ram.push(4);
-        }
-        else if vec_algo == "sha-512" {
-            hash_algo_vec_ram.push(5);
+        match vec_algo.as_str() { // assign a unique ID to each hash type for easier identification
+            "md5" => hash_algo_vec_ram.push(0),
+            "sha-1" => hash_algo_vec_ram.push(1),
+            "sha-224" => hash_algo_vec_ram.push(2),
+            "sha-256" => hash_algo_vec_ram.push(3),
+            "sha-384" => hash_algo_vec_ram.push(4),
+            "sha-512" => hash_algo_vec_ram.push(5),
+            _ => {}
         }
     }
 
@@ -223,42 +216,22 @@ pub fn cuda_crack_hash(chars: String, mnlength: u64, mxlength: u64, mxcudathread
     if wordlist == "" { // if no wordlist is provided, execute a pure-bruteforce algorithm 
 
         // calculate the maximum threads for chunking
-        let mut mxthread: u64;
+        let mut mxthreads: u64;
         unsafe {
             let tot_sm = cudarc::driver::result::device::get_attribute(0, cudarc::driver::sys::CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT).unwrap(); 
             let sm_mxthread = cudarc::driver::result::device::get_attribute(0, cudarc::driver::sys::CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR).unwrap(); 
-            mxthread = (tot_sm * sm_mxthread) as u64;
+            mxthreads = (tot_sm * sm_mxthread) as u64;
         }
-        mxthread = (mxthread * mxcudathreads) / 100; // usable amount of threads (as a percentage)
+        mxthreads = (mxthreads * mxcudathreads) / 100; // usable amount of threads (as a percentage)
         
-        let mut range_vec_ram: Vec<u64> = Vec::new();
         let chars: Vec<char> = chars.chars().collect();
         let chars: String = String::from_iter(chars);
 
-        // calculation of total actions to be performed by the GPU
-        let mut total_act: u64 = 0; 
-        for length in mnlength..=mxlength {
-            for _ in 0..=((chars.len() as u64).pow(length as u32)) {
-                total_act += 1;
-            }
-        }
-        let act_for_thread = total_act.div_ceil(mxthread);
-        // structure of range_vec_ram: <length, from, to>. Each thread works on a group of these 3 elements
-        for length in mnlength..=mxlength {
-            for i in 0..((chars.len() as u64).pow(length as u32)) {
-                if (i * act_for_thread) > total_act || !((i * act_for_thread) + (act_for_thread - 1) <= (chars.len() as u64).pow(length as u32)){
-                    break;
-                }
-                range_vec_ram.push(length);
-                range_vec_ram.push(i * act_for_thread);
-                if (i * act_for_thread) + (act_for_thread - 1) <= (chars.len() as u64).pow(length as u32) {
-                    range_vec_ram.push((i * act_for_thread) + (act_for_thread - 1));
-                }   
-                else {
-                    break;
-                }
-            }
-        }
+        let ret = range_builder(&chars, mxthreads, mnlength, mxlength); // building the range and the minor values
+        let total_act = ret.0;
+        let act_for_thread = ret.1;
+        let range_vec_ram = ret.2;
+        let _ = ret;
 
         // starting the kernel with cuda
         let ptx = ctx.load_module(Ptx::from_file("src/gpuKernel/pure_brute.ptx")).expect("error while loading the module, be sure the module 'src/gpuKernel/WordlistBrute.ptx' exist");
@@ -347,8 +320,9 @@ pub fn cuda_crack_hash(chars: String, mnlength: u64, mxlength: u64, mxcudathread
     }   
     else { // else, use the wordlist for a classic wordlist-bruteforce
         let mut filereader = File::open(&wordlist).expect("can't open file");
-        let mut file = String::new();
-        filereader.read_to_string(&mut file).expect("can't read file");
+        let mut file: Vec<u8> = Vec::new();
+        filereader.read_to_end(&mut file).expect("can't read file"); // reading the file as bytes
+        let file = String::from_utf8_lossy(&file); 
         let mut wordlist = file.lines().map(|x| x.to_string()).collect::<Vec<String>>();
         if expand {
             wordlist = generators::expand_wordlist(wordlist);
