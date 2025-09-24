@@ -42,14 +42,14 @@ pub fn generatewordlist(chars: String, mnlength: u64, mxlength: u64, outputfile:
 pub fn crackhash(chars: String, mnlength: u64, mxlength: u64, input_algo: String, verbose: u8, hash: String, hashfile: String, wordlist: String, nofile: bool, expand: bool) {
   
     // initializing the vector of hashes
-    let mut hash_vec_ram: Vec<&str> = vec![&hash];
+    let mut hash_vec_ram: Vec<String> = vec![hash.to_string()];
     let mut hashfound: Vec<String> = Vec::new();
     let mut lines = String::new();
 
     if &hash == "" { // if the single hash arg is not provided, load the hashes from the file
         let mut filereader = File::open(hashfile).expect("can't open file");
         filereader.read_to_string(&mut lines).expect("can't read file");
-        hash_vec_ram = lines.lines().collect(); // the hash in a vector
+        hash_vec_ram = lines.lines().map(|x| x.to_string()).collect(); // the hash in a vector
     }
 
     if !nofile {
@@ -102,8 +102,9 @@ pub fn crackhash(chars: String, mnlength: u64, mxlength: u64, input_algo: String
         }
         else { // else, use the wordlist for a classic wordlist-bruteforce
             let mut filereader = File::open(&wordlist).expect("can't open file"); // loading the wordlist
-            let mut file = String::new();
-            filereader.read_to_string(&mut file).expect("can't read file");
+            let mut file: Vec<u8> = Vec::new();
+            filereader.read_to_end(&mut file).expect("can't read file"); // reading the file as bytes
+            let file = String::from_utf8_lossy(&file); 
             let mut wordlist = file.lines().map(|x| x.to_string()).collect::<Vec<String>>();
             if expand {
                 wordlist = expand_wordlist(wordlist);
@@ -132,6 +133,39 @@ pub fn crackhash(chars: String, mnlength: u64, mxlength: u64, input_algo: String
             let _ = file.write_all(foundfile.as_bytes());
         }   
     }   
+}   
+
+pub fn range_builder(chars: &str, mxthreads: u64, mnlength: u64, mxlength: u64) -> (u64, u64, Vec<u64>){
+    
+    let mut range_vec: Vec<u64> = Vec::new();
+    
+    // calculation of total actions to be performed by the GPU
+    let mut total_act: u64 = 0; 
+    for length in mnlength..=mxlength {
+        for _ in 0..=((chars.len() as u64).pow(length as u32)) {
+            total_act += 1;
+        }
+    }
+    let act_for_thread = total_act.div_ceil(mxthreads);
+    
+    // structure of range_vec: <length, from, to>. Each thread works on a group of these 3 elements
+    for length in mnlength..=mxlength {
+        for i in 0..((chars.len() as u64).pow(length as u32)) {
+            if (i * act_for_thread) > total_act || !((i * act_for_thread) + (act_for_thread - 1) <= (chars.len() as u64).pow(length as u32)){
+                break;
+            }
+            range_vec.push(length);
+            range_vec.push(i * act_for_thread);
+            if (i * act_for_thread) + (act_for_thread - 1) <= (chars.len() as u64).pow(length as u32) {
+                range_vec.push((i * act_for_thread) + (act_for_thread - 1));
+            }   
+            else {
+                break;
+            }
+        }
+    }
+
+    (total_act, act_for_thread, range_vec)
 }
 
 pub fn expand_wordlist(wordlist: Vec<String>) -> Vec<String> {
