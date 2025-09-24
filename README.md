@@ -1,31 +1,73 @@
 # RustCrack
 ----
-RustCrack v1.1.2 can crack the hashes of MD5, SHA-1, SHA-224, SHA-256, SHA-384 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
-# Install
+RustCrack can crack the hashes of MD5, SHA-1, SHA-256 and SHA-512 or generate simple wordlists. It can also use CUDA to parallelize the tasks. RustCrack is designed to be efficent, fast and reliable.
+
+# Quick Install
 ----
-install all the dependencies:
+For more detailed installation instructions, refer to [INSTALL.md](./docs/INSTALL.md).
 
-part 1:
+## Install for Debian
+Part 1:
 ```
-sudo apt update &&
-sudo apt upgrade &&
-sudo apt install git &&
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh &&
-sudo apt install nvidia-driver-535 &&
-sudo reboot
+sudo apt update && sudo apt upgrade && sudo apt install git && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh & sudo apt install nvidia-driver-535 && sudo reboot
 ```
-part 2:
+Part 2:
 ```
-sudo apt install cuda &&
-echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc &&
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc &&
-source ~/.bashrc
+sudo apt install cuda && echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc && echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc && source ~/.bashrc
 ```
-
-install RustCrack:
+Install RustCrack:
 ```
 git clone https://github.com/H4k1l/RustCrack.git
 ```
+
+## Install for Fedora
+Part 1:
+```
+sudo dnf update && sudo dnf install git && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh && sudo dnf install akmod-nvidia && sudo reboot
+```
+Part 2:
+```
+sudo dnf install xorg-x11-drv-nvidia-cuda && echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc && echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc && source ~/.bashrc
+```
+Install RustCrack:
+```
+git clone https://github.com/H4k1l/RustCrack.git
+```
+
+## Install for Arch
+Part 1:
+```
+sudo pacman -Syu && sudo pacman -S git && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh && sudo pacman -S nvidia && sudo reboot
+```
+Part 2:
+```
+sudo pacman -S cuda && echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc && echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc && source ~/.bashrc
+```
+Install RustCrack:
+```
+git clone https://github.com/H4k1l/RustCrack.git
+```
+
+## Install for Windows
+Part 1:
+```
+winget upgrade --all; winget install --id Git.Git -e --source winget;Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe; Start-Process .\rustup-init.exe;Start-Process "https://www.nvidia.com/Download/index.aspx";
+```
+at this point you have to install the Nvidia drivers from the opened web page and reboot the system.
+Part 2:
+```
+Start-Process "https://developer.nvidia.com/cuda-downloads";
+```
+at this point you have to install the Nvidia drivers from the opened web page and reboot the system.
+Part 3:
+```
+setx PATH "$Env:PATH;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5\bin"; setx CUDA_PATH "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5";
+```
+Install RustCrack:
+```
+git clone https://github.com/H4k1l/RustCrack.git
+```
+
 # Screenshots
 ----
 ![RustCrack](https://github.com/H4k1l/RustCrack/blob/main/images/screenshot1.png)
