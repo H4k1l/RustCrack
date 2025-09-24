@@ -166,7 +166,7 @@ At this point, you need to install the Nvidia drivers from [this](https://www.nv
 Part 2: Install CUDA.
 
 
-You need to install the Nvidia drivers from [this](https://developer.nvidia.com/cuda-downloads) web page and reboot the system.
+Now you need to install the Nvidia drivers from [this](https://developer.nvidia.com/cuda-downloads) web page and reboot the system.
 
 
 Part 3: export the CUDA path.
